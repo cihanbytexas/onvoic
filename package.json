@@ -1,12 +1,13 @@
 {
   "name": "voice-join-api",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "type": "module",
   "engines": {
     "node": "22.x"
   },
   "dependencies": {
     "discord.js": "^14.15.3",
-    "@discordjs/voice": "^0.16.1"
+    "@discordjs/voice": "^0.16.1",
+    "node-fetch": "^3.3.2"
   }
 }
