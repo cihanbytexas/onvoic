@@ -1,61 +1,74 @@
 import { Client, GatewayIntentBits } from "discord.js";
-import { joinVoiceChannel } from "@discordjs/voice";
+import { joinVoiceChannel, getVoiceConnection } from "@discordjs/voice";
 
 export default async function handler(req, res) {
-  // Sadece POST isteğine izin ver
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Only POST requests are allowed" });
-  }
+  if (req.method !== "POST")
+    return res.status(405).json({ error: "POST required" });
 
   const { bot_token, guild_id, channel_id } = req.body;
+  if (!bot_token || !guild_id || !channel_id)
+    return res.status(400).json({ error: "Missing parameters" });
 
-  if (!bot_token || !guild_id || !channel_id) {
-    return res.status(400).json({ error: "Eksik parametre! bot_token, guild_id ve channel_id gerekli." });
-  }
+  const client = new Client({
+    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates],
+  });
 
-  try {
-    console.log("🎧 Bot başlatılıyor...");
+  client.once("ready", async () => {
+    console.log(`✅ Logged in as ${client.user.tag}`);
 
-    const client = new Client({
-      intents: [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildVoiceStates
-      ]
-    });
+    try {
+      const guild = await client.guilds.fetch(guild_id);
+      const channel = await guild.channels.fetch(channel_id);
 
-    // Bot giriş yapınca sese bağlanma işlemi
-    client.once("ready", async () => {
-      try {
-        const guild = await client.guilds.fetch(guild_id);
-        const channel = await guild.channels.fetch(channel_id);
+      if (!channel || channel.type !== 2)
+        return res.status(400).json({ error: "Invalid voice channel" });
 
-        if (!channel || channel.type !== 2) {
-          console.error("❌ Belirtilen kanal bir ses kanalı değil!");
-          await client.destroy();
-          return res.status(400).json({ error: "Belirtilen kanal ses kanalı değil!" });
+      let connection = joinVoiceChannel({
+        channelId: channel.id,
+        guildId: guild.id,
+        adapterCreator: guild.voiceAdapterCreator,
+      });
+
+      console.log(`🎧 Joined ${channel.name}`);
+
+      // 🔁 20 saniyede bir bağlantıyı yenile
+      setInterval(() => {
+        const conn = getVoiceConnection(guild.id);
+        if (conn) {
+          conn.rejoin();
+          console.log("🔁 Refreshed connection");
+        } else {
+          console.log("⚠️ Connection lost. Rejoining...");
+          connection = joinVoiceChannel({
+            channelId: channel.id,
+            guildId: guild.id,
+            adapterCreator: guild.voiceAdapterCreator,
+          });
         }
+      }, 20_000);
 
-        joinVoiceChannel({
-          channelId: channel.id,
-          guildId: guild.id,
-          adapterCreator: guild.voiceAdapterCreator,
-          selfDeaf: false
-        });
+      // ❗ Bağlantı koparsa otomatik yeniden bağlan
+      connection.on("disconnect", () => {
+        console.log("❌ Disconnected! Trying to rejoin...");
+        setTimeout(() => {
+          connection = joinVoiceChannel({
+            channelId: channel.id,
+            guildId: guild.id,
+            adapterCreator: guild.voiceAdapterCreator,
+          });
+          console.log("🔄 Reconnected!");
+        }, 5000);
+      });
 
-        console.log(`✅ Bot sese bağlandı: ${channel.name}`);
-        setTimeout(() => client.destroy(), 10000); // 10 saniye sonra bağlantıyı kapat
-        return res.status(200).json({ success: true, message: `Bot '${channel.name}' ses kanalına bağlandı.` });
-      } catch (error) {
-        console.error("❌ Ses kanalına bağlanırken hata:", error);
-        await client.destroy();
-        return res.status(500).json({ error: "Ses kanalına bağlanılamadı.", details: error.message });
-      }
-    });
+      return res.status(200).json({
+        success: true,
+        message: "Bot joined and will stay active in voice channel.",
+      });
+    } catch (err) {
+      console.error("❌ Error:", err);
+      return res.status(500).json({ error: err.message });
+    }
+  });
 
-    // Token ile giriş
-    await client.login(bot_token);
-  } catch (err) {
-    console.error("❌ Genel hata:", err);
-    return res.status(500).json({ error: "Sunucu hatası", details: err.message });
+  client.login(bot_token);
   }
-}
