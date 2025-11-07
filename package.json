@@ -1,12 +1,13 @@
 {
-  "name": "voice-join-api",
-  "version": "1.1.0",
+  "name": "texastr-ses-api",
+  "version": "1.0.0",
   "type": "module",
+  "main": "index.js",
   "engines": {
     "node": "22.x"
   },
   "dependencies": {
-    "discord.js": "^14.15.3",
-    "@discordjs/voice": "^0.16.1"
+    "discord.js": "^14.16.3",
+    "@discordjs/voice": "^1.2.0"
   }
 }
